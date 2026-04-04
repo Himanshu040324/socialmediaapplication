@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, use } from "react";
 import Link from "next/link";
 import { loginAction } from "./actions";
 
-export default function LoginPage() {
+export default function LoginPage({ searchParams }) {
+  const { message } = use(searchParams);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -85,6 +86,29 @@ export default function LoginPage() {
           <h1 className="heading">Welcome back</h1>
           <p className="subheading">Sign in to continue your journey</p>
         </div>
+
+        {/* Success message — e.g. after signup */}
+        {message && (
+          <div className="message-box" role="status">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle
+                cx="7"
+                cy="7"
+                r="6"
+                stroke="currentColor"
+                strokeWidth="1.2"
+              />
+              <path
+                d="M4.5 7l2 2 3-3"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            {message}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="form" noValidate>
           {/* Email */}
@@ -705,6 +729,20 @@ export default function LoginPage() {
             opacity: 1;
             transform: translateY(0);
           }
+        }
+
+        .message-box {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 11px 14px;
+          background: rgba(80, 200, 120, 0.08);
+          border: 0.5px solid rgba(80, 200, 120, 0.25);
+          border-radius: 8px;
+          font-size: 13px;
+          color: #60c080;
+          margin-bottom: 4px;
+          animation: fade-up 0.2s ease both;
         }
 
         /* === RESPONSIVE === */

@@ -38,6 +38,10 @@ export default async function FeedPage() {
 
       {/* rest of your feed will go here */}
 
+      <div className=' text-white'>
+        This is feed page.
+      </div>
+
     </div>
   )
 }

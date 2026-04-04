@@ -1,11 +1,11 @@
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import Navbar from "@/components/Navbar";
+import { Syne } from "next/font/google";
 
-const inter = Inter({
-  variable: "--font-inter",
+const syne = Syne({
+  variable: "--font-syne",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata = {
@@ -18,7 +18,7 @@ export default function RootLayout({ children }) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} h-full antialiased`}
+      className={`${syne.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans bg-mv-bg">
         <ThemeProvider
@@ -27,7 +27,6 @@ export default function RootLayout({ children }) {
           enableSystem
           disableTransitionOnChange
         >
-          <Navbar/>
           {children}
         </ThemeProvider>
       </body>

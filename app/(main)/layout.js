@@ -12,5 +12,7 @@ export default async function MainLayout({ children }) {
     redirect("/login");
   }
 
-  return <>{children}</>;
+  return <>
+  <Navbar/>
+  {children}</>;
 }
