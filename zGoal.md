@@ -18,3 +18,10 @@ Step 6 → Add sort options (hot, new, top)
 # Issues
 1. Manual Logout from app logout button.
 2. after logout when it come back to home page there shows a themeprovier error.
+
+3. post is creating but not posting.
+4. admin/dashboard can be accessed by anyone writing admin/dashboard in url.
+5. Voting system is not working properly.
+
+# To be created later
+1. VoteButton.jsx , CommentSection.jsx in components. and many more.
