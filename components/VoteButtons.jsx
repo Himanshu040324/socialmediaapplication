@@ -10,36 +10,46 @@ export default function VoteButtons({ postId, userId, initialScore, initialVote 
   const supabase                     = createClient()
 
   async function handleVote(value) {
-    const newValue = userVote === value ? 0 : value
+    // Capture BEFORE any state update to avoid stale closure inside startTransition
+    const prevVote = userVote
+    const newValue = prevVote === value ? 0 : value
 
     // Optimistic UI update
-    setScore(prev => prev - userVote + newValue)
+    setScore(s => s - prevVote + newValue)
     setUserVote(newValue)
 
     startTransition(async () => {
-      console.log('voting with:', { postId, userId, newValue, userVote })
-
       if (newValue === 0) {
+        // User toggled their existing vote off → delete it
         const { error } = await supabase
           .from('votes')
           .delete()
           .eq('post_id', postId)
           .eq('user_id', userId)
-        console.log('delete error:', error)
 
-      } else if (userVote === 0) {
-        const { error } = await supabase
-          .from('votes')
-          .insert({ post_id: postId, user_id: userId, value: newValue })
-        console.log('insert error:', error)
+        if (error) {
+          // Rollback optimistic update
+          setScore(s => s - newValue + prevVote)
+          setUserVote(prevVote)
+          console.error('delete vote error:', error)
+        }
 
       } else {
+        // Insert or update (handles both new votes AND switching up↔down)
+        // upsert will INSERT if no row exists, UPDATE if it does — no more silent failures
         const { error } = await supabase
           .from('votes')
-          .update({ value: newValue })
-          .eq('post_id', postId)
-          .eq('user_id', userId)
-        console.log('update error:', error)
+          .upsert(
+            { post_id: postId, user_id: userId, value: newValue },
+            { onConflict: 'post_id,user_id' }
+          )
+
+        if (error) {
+          // Rollback optimistic update
+          setScore(s => s - newValue + prevVote)
+          setUserVote(prevVote)
+          console.error('upsert vote error:', error)
+        }
       }
     })
   }
