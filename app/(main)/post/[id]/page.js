@@ -38,7 +38,7 @@ export default async function PostPage({ params }) {
 
   // Calculate score + user's current vote
   const score = post.votes?.reduce((sum, v) => sum + v.value, 0) ?? 0;
-  
+
   // wrong old
   // const userVote = post.votes?.find(v => v.user_id === user.id)?.value ?? 0
   // correct new
@@ -126,9 +126,14 @@ export default async function PostPage({ params }) {
 
             {/* Body */}
             {post.type === "text" && post.body && (
-              <p className="text-sm text-mv-muted leading-relaxed font-normal">
-                {post.body}
-              </p>
+              // <p className="text-sm text-mv-muted leading-relaxed font-normal">
+              //   {post.body}
+              // </p>
+
+              <div
+                className="rich-text-content"
+                dangerouslySetInnerHTML={{ __html: post.body }}
+              />
             )}
 
             {/* Image */}

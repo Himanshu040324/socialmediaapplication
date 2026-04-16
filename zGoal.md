@@ -16,12 +16,20 @@ Step 5 → Add comments
 Step 6 → Add sort options (hot, new, top)
 
 # Issues
-1. Manual Logout from app logout button.
-2. after logout when it come back to home page there shows a themeprovier error.
-
-3. post is creating but not posting.
-4. admin/dashboard can be accessed by anyone writing admin/dashboard in url.
+<!-- 1. Manual Logout from app logout button.
+2. after logout when it come back to home page there shows a themeprovier error. 
+3. post is creating but not posting. 
 5. Voting system is not working properly.
+8. After updating the Rich text editor, i am not able to create any post.
+
+-->
+
+4. admin/dashboard can be accessed by anyone writing admin/dashboard in url.
+6. On feed, there's a joined section but it does not show the joined communities.
+7. When you join community, you click on join it shows joined-leave option but on refresh it resets.
 
 # To be created later
 1. VoteButton.jsx , CommentSection.jsx in components. and many more.
+
+# Vercel Link
+https://socialmediaapplication-gamma.vercel.app/
