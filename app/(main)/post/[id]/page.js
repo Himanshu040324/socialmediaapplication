@@ -13,21 +13,16 @@ export default async function PostPage({ params }) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Fetch post with author + community
+  // Fetch post with author, community, votes
   const { data: post } = await supabase
     .from("posts")
     .select(
       `
-      id,
-      title,
-      body,
-      image_url,
-      link_url,
-      type,
-      created_at,
+      id, title, body, image_url, link_url, type, created_at,
+      is_removed,
       author_id,
       profiles!posts_author_id_fkey(username),
-      communities(id, name),
+      communities(id, name, created_by),
       votes(user_id, value)
     `,
     )
@@ -36,25 +31,36 @@ export default async function PostPage({ params }) {
 
   if (!post) redirect("/feed");
 
-  // Calculate score + user's current vote
-  const score = post.votes?.reduce((sum, v) => sum + v.value, 0) ?? 0;
+  const communityId = post.communities?.id;
+  const communityName = post.communities?.name;
+  const isMod = user.id === post.communities?.created_by;
 
-  // wrong old
-  // const userVote = post.votes?.find(v => v.user_id === user.id)?.value ?? 0
-  // correct new
+  // ── Ban check — can this user view posts in this community? ─────────────────
+  if (!isMod) {
+    const { data: ban } = await supabase
+      .from("community_bans")
+      .select("id")
+      .eq("community_id", communityId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (ban) redirect(`/c/${communityName}`);
+  }
+
+  // Non-mods can't view removed posts
+  if (post.is_removed && !isMod) redirect(`/c/${communityName}`);
+
+  const score = post.votes?.reduce((sum, v) => sum + v.value, 0) ?? 0;
   const userVote = post.votes?.find((v) => v.user_id === user.id)?.value ?? 0;
 
-  // Fetch comments
+  // Fetch comments with comment_votes + is_removed
   const { data: comments } = await supabase
     .from("comments")
     .select(
       `
-      id,
-      body,
-      created_at,
-      author_id,
-      parent_comment_id,
-      profiles!comments_author_id_fkey(username)
+      id, body, created_at, author_id, parent_comment_id, is_removed,
+      profiles!comments_author_id_fkey(username),
+      comment_votes(user_id, value)
     `,
     )
     .eq("post_id", post.id)
@@ -64,7 +70,7 @@ export default async function PostPage({ params }) {
     <div className="max-w-3xl mx-auto px-4 py-8 font-sans">
       {/* Back link */}
       <Link
-        href={`/c/${post.communities?.name}`}
+        href={`/c/${communityName}`}
         className="inline-flex items-center gap-2 text-mv-muted text-sm font-medium mb-6 hover:text-mv-text transition-colors"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -76,14 +82,33 @@ export default async function PostPage({ params }) {
             strokeLinejoin="round"
           />
         </svg>
-        c/{post.communities?.name}
+        c/{communityName}
       </Link>
 
+      {/* Removed notice for mods */}
+      {post.is_removed && isMod && (
+        <div className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-500/20 bg-red-500/5">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="5.5" stroke="#f87171" strokeWidth="1.2" />
+            <path
+              d="M4.5 7h5"
+              stroke="#f87171"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="text-xs font-semibold text-red-400">
+            This post has been removed — only visible to moderators
+          </span>
+        </div>
+      )}
+
       {/* Post card */}
-      <div className="bg-mv-surface border border-mv-border rounded-2xl overflow-hidden mb-4">
-        {/* Vote + content row */}
+      <div
+        className={`bg-mv-surface border rounded-2xl overflow-hidden mb-4
+        ${post.is_removed ? "border-red-500/20 opacity-80" : "border-mv-border"}`}
+      >
         <div className="flex gap-0">
-          {/* Vote sidebar */}
           <VoteButtons
             postId={post.id}
             userId={user.id}
@@ -91,15 +116,14 @@ export default async function PostPage({ params }) {
             initialVote={userVote}
           />
 
-          {/* Post content */}
           <div className="flex-1 p-6 min-w-0">
             {/* Meta */}
             <div className="flex items-center gap-2 flex-wrap mb-3">
               <Link
-                href={`/c/${post.communities?.name}`}
+                href={`/c/${communityName}`}
                 className="text-xs font-bold text-mv-text hover:text-mv-accent transition-colors"
               >
-                c/{post.communities?.name}
+                c/{communityName}
               </Link>
               <span className="text-mv-dim text-xs">·</span>
               <span className="text-xs text-mv-dim">
@@ -119,24 +143,17 @@ export default async function PostPage({ params }) {
               )}
             </div>
 
-            {/* Title */}
             <h1 className="text-xl font-bold text-mv-text leading-snug tracking-tight mb-4">
               {post.title}
             </h1>
 
-            {/* Body */}
             {post.type === "text" && post.body && (
-              // <p className="text-sm text-mv-muted leading-relaxed font-normal">
-              //   {post.body}
-              // </p>
-
               <div
                 className="rich-text-content"
                 dangerouslySetInnerHTML={{ __html: post.body }}
               />
             )}
 
-            {/* Image */}
             {post.type === "image" && post.image_url && (
               <img
                 src={post.image_url}
@@ -145,7 +162,6 @@ export default async function PostPage({ params }) {
               />
             )}
 
-            {/* Link */}
             {post.type === "link" && post.link_url && (
               <a
                 href={post.link_url}
@@ -174,7 +190,7 @@ export default async function PostPage({ params }) {
         </div>
 
         {/* Post footer */}
-        <div className="px-6 py-3 border-t border-mv-border flex items-center gap-4">
+        <div className="px-6 py-3 border-t border-mv-border flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-xs text-mv-dim">
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
               <path
@@ -190,11 +206,14 @@ export default async function PostPage({ params }) {
         </div>
       </div>
 
-      {/* Comments section */}
+      {/* Comments */}
       <CommentSection
         postId={post.id}
         userId={user.id}
         initialComments={comments ?? []}
+        communityId={communityId}
+        communityName={communityName}
+        isMod={isMod}
       />
     </div>
   );

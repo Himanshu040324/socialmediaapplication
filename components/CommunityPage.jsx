@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { createClient } from '@/utils/supabase/client'
-import VoteButtons from '@/components/VoteButtons'
+import { useState, useMemo } from 'react'
+import { useRouter }         from 'next/navigation'
+import Link                  from 'next/link'
+import { createClient }      from '@/utils/supabase/client'
+import VoteButtons           from '@/components/VoteButtons'
+import ModMenu               from '@/components/ModMenu'
 
 const SORT_TABS = ['Hot', 'New', 'Top']
 
@@ -15,8 +16,8 @@ function hotScore(score, createdAt) {
 
 function timeAgo(dateStr) {
   const seconds = Math.floor((new Date() - new Date(dateStr)) / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 60)    return `${seconds}s ago`
+  if (seconds < 3600)  return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
   return `${Math.floor(seconds / 86400)}d ago`
 }
@@ -26,11 +27,40 @@ function joinedDate(dateStr) {
 }
 
 // ─── Post card ────────────────────────────────────────────────────────────────
-function PostCard({ post, userId }) {
+function PostCard({ post, userId, isMod, communityId, communityName, onRemoved, onPinToggled, onBanned }) {
   const router = useRouter()
 
   return (
-    <div className="bg-mv-surface border border-mv-border rounded-2xl overflow-hidden hover:border-mv-primary/30 transition-colors">
+    <div className={`bg-mv-surface border rounded-2xl overflow-hidden transition-colors
+      ${post.is_removed
+        ? 'border-red-500/20 opacity-60'
+        : post.is_pinned
+          ? 'border-mv-primary/40 hover:border-mv-primary/60'
+          : 'border-mv-border hover:border-mv-primary/30'
+      }`}
+    >
+      {/* Pinned banner */}
+      {post.is_pinned && !post.is_removed && (
+        <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-mv-primary/20 bg-mv-primary/5">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+            <path d="M9 1L13 5l-4 4-2-1-3 3H2v-2l3-3-1-2 4-4z"
+              stroke="var(--mv-primary)" strokeWidth="1.2" strokeLinejoin="round" fill="var(--mv-primary)"/>
+          </svg>
+          <span className="text-xs font-semibold" style={{ color: 'var(--mv-primary)' }}>Pinned</span>
+        </div>
+      )}
+
+      {/* Removed banner (mods only — post is already filtered for non-mods) */}
+      {post.is_removed && (
+        <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-red-500/20 bg-red-500/5">
+          <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="5.5" stroke="#f87171" strokeWidth="1.2"/>
+            <path d="M4.5 7h5" stroke="#f87171" strokeWidth="1.3" strokeLinecap="round"/>
+          </svg>
+          <span className="text-xs font-semibold text-red-400">Removed — only visible to mods</span>
+        </div>
+      )}
+
       <div className="flex">
         <div onClick={e => e.stopPropagation()}>
           <VoteButtons
@@ -93,12 +123,33 @@ function PostCard({ post, userId }) {
             </span>
           )}
 
-          {/* Footer */}
-          <div className="flex items-center gap-1.5 text-xs text-mv-dim">
-            <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
-              <path d="M1 1h11v8H7.5L5 12V9H1V1z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
-            </svg>
-            {post.commentCount} {post.commentCount === 1 ? 'comment' : 'comments'}
+          {/* Footer: comment count + mod menu */}
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-1.5 text-xs text-mv-dim">
+              <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
+                <path d="M1 1h11v8H7.5L5 12V9H1V1z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
+              </svg>
+              {post.commentCount} {post.commentCount === 1 ? 'comment' : 'comments'}
+            </div>
+
+            {/* Mod actions — stop propagation so clicking menu doesn't navigate */}
+            {isMod && (
+              <div onClick={e => e.stopPropagation()}>
+                <ModMenu
+                  type="post"
+                  targetId={post.id}
+                  targetAuthorId={post.author_id}
+                  targetAuthorName={post.profiles?.username}
+                  communityId={communityId}
+                  communityName={communityName}
+                  isPinned={post.is_pinned}
+                  isRemoved={post.is_removed}
+                  onRemoved={onRemoved}
+                  onPinToggled={onPinToggled}
+                  onBanned={onBanned}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -129,26 +180,63 @@ function PostSkeleton() {
 export default function CommunityPage({
   community,
   memberCount: initialMemberCount,
-  isMember: initialIsMember,
+  isMember:   initialIsMember,
   isCreator,
-  posts: initialPosts,
+  posts:      initialPosts,
   userId,
 }) {
   const [isMember,    setIsMember]    = useState(initialIsMember)
   const [memberCount, setMemberCount] = useState(initialMemberCount)
   const [joining,     setJoining]     = useState(false)
   const [sort,        setSort]        = useState('Hot')
+
+  // Local mutable posts state so mod actions reflect immediately
+  const [posts, setPosts] = useState(initialPosts)
+
   const supabase = createClient()
   const router   = useRouter()
 
-  // ── Sort posts client-side ────────────────────────────────────────────
-  const sortedPosts = [...initialPosts].sort((a, b) => {
-    if (sort === 'New') return new Date(b.created_at) - new Date(a.created_at)
-    if (sort === 'Top') return b.score - a.score
-    return hotScore(b.score, b.created_at) - hotScore(a.score, a.created_at)
-  })
+  // isMod = isCreator (extend here later for multi-mod support)
+  const isMod = isCreator
 
-  // ── Join / Leave ──────────────────────────────────────────────────────
+  // ── Mod callbacks ─────────────────────────────────────────────────────────
+  function handleRemoved(postId, removed) {
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, is_removed: removed } : p))
+  }
+
+  function handlePinToggled(postId, pinned) {
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, is_pinned: pinned } : p))
+  }
+
+  function handleBanned(bannedUserId) {
+    // Remove all posts by this user from the local view after ban
+    setPosts(prev => prev.filter(p => p.author_id !== bannedUserId))
+  }
+
+  // ── Sort + filter posts ───────────────────────────────────────────────────
+  const sortedPosts = useMemo(() => {
+    // Non-mods never see removed posts
+    const visible = isMod ? posts : posts.filter(p => !p.is_removed)
+
+    const sortFn = (a, b) => {
+      if (sort === 'New') return new Date(b.created_at) - new Date(a.created_at)
+      if (sort === 'Top') return b.score - a.score
+      return hotScore(b.score, b.created_at) - hotScore(a.score, a.created_at)
+    }
+
+    // Pinned posts always float to top (within their own sorted order)
+    const pinned  = visible.filter(p => p.is_pinned  && !p.is_removed)
+    const removed = isMod ? visible.filter(p => p.is_removed) : []
+    const regular = visible.filter(p => !p.is_pinned && !p.is_removed)
+
+    return [
+      ...pinned.sort(sortFn),
+      ...regular.sort(sortFn),
+      ...removed.sort(sortFn), // removed posts shown at the bottom for mods
+    ]
+  }, [posts, sort, isMod])
+
+  // ── Join / Leave ──────────────────────────────────────────────────────────
   async function handleJoinLeave() {
     setJoining(true)
 
@@ -158,14 +246,12 @@ export default function CommunityPage({
         .delete()
         .eq('community_id', community.id)
         .eq('user_id', userId)
-
       setIsMember(false)
       setMemberCount(c => c - 1)
     } else {
       await supabase
         .from('community_members')
         .insert({ community_id: community.id, user_id: userId })
-
       setIsMember(true)
       setMemberCount(c => c + 1)
     }
@@ -183,40 +269,39 @@ export default function CommunityPage({
         {/* Banner */}
         <div className="relative h-32 w-full">
           {community.banner_url ? (
-            <img
-              src={community.banner_url}
-              alt={`${community.name} banner`}
-              className="w-full h-full object-cover"
-            />
+            <img src={community.banner_url} alt={`${community.name} banner`} className="w-full h-full object-cover"/>
           ) : (
-            <div
-              className="w-full h-full"
-              style={{ background: 'linear-gradient(135deg, var(--mv-surface-2) 0%, var(--mv-border) 100%)' }}
-            />
+            <div className="w-full h-full" style={{ background: 'linear-gradient(135deg, var(--mv-surface-2) 0%, var(--mv-border) 100%)' }}/>
           )}
         </div>
 
         {/* Icon + info */}
         <div className="px-5 pb-5">
 
-          {/* Avatar overlaps banner */}
           <div className="flex items-end justify-between -mt-7 mb-3">
+            {/* Avatar */}
             <div className="w-14 h-14 rounded-2xl border-4 border-mv-surface overflow-hidden bg-mv-primary/10 shrink-0 flex items-center justify-center">
               {community.avatar_url ? (
-                <img
-                  src={community.avatar_url}
-                  alt={community.name}
-                  className="w-full h-full object-cover"
-                />
+                <img src={community.avatar_url} alt={community.name} className="w-full h-full object-cover"/>
               ) : (
-                <span className="text-xl font-bold text-mv-primary">
-                  {community.name?.[0]?.toUpperCase()}
-                </span>
+                <span className="text-xl font-bold text-mv-primary">{community.name?.[0]?.toUpperCase()}</span>
               )}
             </div>
 
-            {/* Actions */}
+            {/* Actions row */}
             <div className="flex items-center gap-2">
+              {/* Mod badge */}
+              {isMod && (
+                <span className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl border"
+                  style={{ color: 'var(--mv-primary)', borderColor: 'var(--mv-primary)', background: 'rgba(124,111,224,0.08)' }}>
+                  <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+                    <path d="M7 1.5L2 4v3.5C2 10.54 4.24 13 7 13s5-2.46 5-5.5V4L7 1.5z"
+                      stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+                  </svg>
+                  Moderator
+                </span>
+              )}
+
               {(isMember || isCreator) && (
                 <Link
                   href={`/c/${community.name}/submit`}
@@ -245,12 +330,10 @@ export default function CommunityPage({
             </div>
           </div>
 
-          {/* Name */}
+          {/* Name + description */}
           <h1 className="text-lg font-bold text-mv-text tracking-tight leading-none mb-1">
             c/{community.name}
           </h1>
-
-          {/* Description */}
           {community.description && (
             <p className="text-sm text-mv-muted leading-relaxed mb-4 max-w-lg">
               {community.description}
@@ -259,7 +342,6 @@ export default function CommunityPage({
 
           {/* Stats row */}
           <div className="flex items-center gap-5 flex-wrap">
-
             <div className="flex items-center gap-1.5 text-xs text-mv-dim">
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
                 <circle cx="5.5" cy="4.5" r="2" stroke="currentColor" strokeWidth="1.2"/>
@@ -267,10 +349,7 @@ export default function CommunityPage({
                 <circle cx="10.5" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.1"/>
                 <path d="M12.5 12c0-1.66-1.34-3-3-3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
               </svg>
-              <span>
-                <span className="font-semibold text-mv-muted">{memberCount.toLocaleString()}</span>
-                {' '}{memberCount === 1 ? 'member' : 'members'}
-              </span>
+              <span><span className="font-semibold text-mv-muted">{memberCount.toLocaleString()}</span> {memberCount === 1 ? 'member' : 'members'}</span>
             </div>
 
             <div className="flex items-center gap-1.5 text-xs text-mv-dim">
@@ -288,10 +367,7 @@ export default function CommunityPage({
                 </svg>
                 <span>
                   Moderated by{' '}
-                  <Link
-                    href={`/u/${community.profiles.username}`}
-                    className="font-semibold text-mv-accent hover:text-mv-text transition-colors"
-                  >
+                  <Link href={`/u/${community.profiles.username}`} className="font-semibold text-mv-accent hover:text-mv-text transition-colors">
                     u/{community.profiles.username}
                   </Link>
                 </span>
@@ -302,9 +378,7 @@ export default function CommunityPage({
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
                 <path d="M1 1h11v8H7.5L5 12V9H1V1z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
               </svg>
-              <span>
-                <span className="font-semibold text-mv-muted">{initialPosts.length}</span> posts
-              </span>
+              <span><span className="font-semibold text-mv-muted">{initialPosts.length}</span> posts</span>
             </div>
           </div>
         </div>
@@ -364,7 +438,17 @@ export default function CommunityPage({
           </div>
         ) : (
           sortedPosts.map(post => (
-            <PostCard key={post.id} post={post} userId={userId} />
+            <PostCard
+              key={post.id}
+              post={post}
+              userId={userId}
+              isMod={isMod}
+              communityId={community.id}
+              communityName={community.name}
+              onRemoved={handleRemoved}
+              onPinToggled={handlePinToggled}
+              onBanned={handleBanned}
+            />
           ))
         )}
       </div>
