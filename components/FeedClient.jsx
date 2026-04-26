@@ -2,16 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/utils/supabase/client'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import VoteButtons from '@/components/VoteButtons'
+import { useRouter }    from 'next/navigation'
+import Link             from 'next/link'
+import VoteButtons      from '@/components/VoteButtons'
+import FlairBadge       from '@/components/FlairBadge'
 
 const SORT_TABS = ['Hot', 'New', 'Top']
 
 function timeAgo(dateStr) {
   const seconds = Math.floor((new Date() - new Date(dateStr)) / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 60)    return `${seconds}s ago`
+  if (seconds < 3600)  return `${Math.floor(seconds / 60)}m ago`
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
   return `${Math.floor(seconds / 86400)}d ago`
 }
@@ -29,7 +30,6 @@ function PostCard({ post, userId }) {
     <div className="bg-mv-surface border border-mv-border rounded-2xl overflow-hidden hover:border-mv-primary/30 transition-colors">
       <div className="flex gap-0">
 
-        {/* Vote sidebar — stop propagation so clicks don't navigate to post */}
         <div onClick={e => e.stopPropagation()}>
           <VoteButtons
             postId={post.id}
@@ -39,14 +39,12 @@ function PostCard({ post, userId }) {
           />
         </div>
 
-        {/* Content area — div + router.push instead of Link to avoid nested <a> */}
         <div
           className="flex-1 p-4 min-w-0 cursor-pointer group"
           onClick={() => router.push(`/post/${post.id}`)}
         >
           {/* Meta row */}
           <div className="flex items-center gap-2 flex-wrap mb-2">
-            {/* Community link — stopPropagation prevents double navigation */}
             <Link
               href={`/c/${post.communities?.name}`}
               onClick={e => e.stopPropagation()}
@@ -60,6 +58,16 @@ function PostCard({ post, userId }) {
             </span>
             <span className="text-mv-dim text-xs">·</span>
             <span className="text-xs text-mv-dim">{timeAgo(post.created_at)}</span>
+
+            {/* Flair badge */}
+            {post.flair && (
+              <>
+                <span className="text-mv-dim text-xs">·</span>
+                <div onClick={e => e.stopPropagation()}>
+                  <FlairBadge name={post.flair.name} color={post.flair.color} size="xs" />
+                </div>
+              </>
+            )}
 
             {post.type !== 'text' && (
               <span className="ml-auto text-xs font-semibold text-mv-primary bg-mv-primary/10 border border-mv-primary/20 rounded px-2 py-0.5 uppercase tracking-wider">
@@ -85,7 +93,7 @@ function PostCard({ post, userId }) {
           {/* Text snippet */}
           {post.type === 'text' && post.body && (
             <p className="text-xs text-mv-muted leading-relaxed line-clamp-2 mb-2">
-              {post.body}
+              {post.body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
             </p>
           )}
 
@@ -93,8 +101,8 @@ function PostCard({ post, userId }) {
           {post.type === 'link' && post.link_url && (
             <span className="inline-flex items-center gap-1.5 text-xs text-mv-accent border border-mv-border bg-mv-surface-2 px-3 py-1 rounded-lg mb-2 truncate max-w-xs">
               <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
-                <path d="M5.5 8.5a3.5 3.5 0 005 0l2-2a3.5 3.5 0 00-5-5L6.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                <path d="M8.5 5.5a3.5 3.5 0 00-5 0L1.5 7.5a3.5 3.5 0 005 5l1-1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                <path d="M5.5 8.5a3.5 3.5 0 005 0l2-2a3.5 3.5 0 00-5-5L6.5 2.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+                <path d="M8.5 5.5a3.5 3.5 0 00-5 0L1.5 7.5a3.5 3.5 0 005 5l1-1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
               </svg>
               {post.link_url}
             </span>
@@ -103,7 +111,7 @@ function PostCard({ post, userId }) {
           {/* Comment count */}
           <div className="flex items-center gap-1.5 text-xs text-mv-dim">
             <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
-              <path d="M1 1h11v8H7.5L5 12V9H1V1z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+              <path d="M1 1h11v8H7.5L5 12V9H1V1z" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round"/>
             </svg>
             {post.commentCount} {post.commentCount === 1 ? 'comment' : 'comments'}
           </div>
@@ -114,7 +122,7 @@ function PostCard({ post, userId }) {
   )
 }
 
-// ─── Skeleton loader ──────────────────────────────────────────────────────────
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 function PostSkeleton() {
   return (
     <div className="bg-mv-surface border border-mv-border rounded-2xl overflow-hidden animate-pulse">
@@ -140,7 +148,7 @@ function EmptyState({ filter }) {
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div className="w-14 h-14 rounded-2xl bg-mv-surface-2 border border-mv-border flex items-center justify-center mb-4">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-          <path d="M3 5h18M3 12h18M3 19h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-mv-dim" />
+          <path d="M3 5h18M3 12h18M3 19h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-mv-dim"/>
         </svg>
       </div>
       <p className="text-mv-muted font-medium text-sm">No posts yet</p>
@@ -163,9 +171,9 @@ function EmptyState({ filter }) {
 
 // ─── Main FeedClient ──────────────────────────────────────────────────────────
 export default function FeedClient({ userId }) {
-  const [filter, setFilter]   = useState('all')
-  const [sort, setSort]       = useState('Hot')
-  const [posts, setPosts]     = useState([])
+  const [filter,  setFilter]  = useState('all')
+  const [sort,    setSort]    = useState('Hot')
+  const [posts,   setPosts]   = useState([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -197,12 +205,16 @@ export default function FeedClient({ userId }) {
         link_url,
         type,
         created_at,
+        is_removed,
         author_id,
         profiles!posts_author_id_fkey(username),
         communities(id, name),
         votes(user_id, value),
-        comments(id)
+        comments(id),
+        flairs(id, name, color)
       `)
+      // Never show removed posts in the global feed
+      .eq('is_removed', false)
 
     if (communityIds) {
       query = query.in('community_id', communityIds)
@@ -226,6 +238,8 @@ export default function FeedClient({ userId }) {
       score:        post.votes?.reduce((sum, v) => sum + v.value, 0) ?? 0,
       userVote:     post.votes?.find(v => v.user_id === userId)?.value ?? 0,
       commentCount: post.comments?.length ?? 0,
+      // flairs is returned as array from the join — grab first element
+      flair:        Array.isArray(post.flairs) ? post.flairs[0] ?? null : post.flairs ?? null,
     }))
 
     if (sort === 'Top') {
@@ -248,8 +262,6 @@ export default function FeedClient({ userId }) {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-mv-text tracking-tight">Feed</h1>
-
-        {/* All / Joined toggle */}
         <div className="flex items-center bg-mv-surface-2 border border-mv-border rounded-xl p-1 gap-1">
           {['all', 'joined'].map(f => (
             <button
@@ -281,18 +293,18 @@ export default function FeedClient({ userId }) {
           >
             {tab === 'Hot' && (
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                <path d="M7 1C7 1 9.5 4 9.5 6.5C9.5 7.88 8.38 9 7 9C5.62 9 4.5 7.88 4.5 6.5C4.5 5.5 5 4.5 5 4.5C5 4.5 4 6 4 7.5C4 10.54 6.24 13 9 13C11.76 13 13 10.54 13 8C13 4 10 1 7 1Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                <path d="M7 1C7 1 9.5 4 9.5 6.5C9.5 7.88 8.38 9 7 9C5.62 9 4.5 7.88 4.5 6.5C4.5 5.5 5 4.5 5 4.5C5 4.5 4 6 4 7.5C4 10.54 6.24 13 9 13C11.76 13 13 10.54 13 8C13 4 10 1 7 1Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
               </svg>
             )}
             {tab === 'New' && (
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.2" />
-                <path d="M7 4v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.2"/>
+                <path d="M7 4v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
               </svg>
             )}
             {tab === 'Top' && (
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                <path d="M7 2L13 9H1L7 2Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                <path d="M7 2L13 9H1L7 2Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
               </svg>
             )}
             {tab}

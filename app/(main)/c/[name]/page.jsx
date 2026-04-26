@@ -3,7 +3,6 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import CommunityPage from '@/components/CommunityPage'
 
-// ─── Banned landing — shown instead of community content ─────────────────────
 function BannedView({ communityName, reason }) {
   return (
     <div className="max-w-3xl mx-auto px-4 py-24 font-sans flex flex-col items-center text-center gap-4">
@@ -34,8 +33,6 @@ function BannedView({ communityName, reason }) {
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default async function CommunityPageRoute({ params }) {
   const { name } = await params
   const supabase  = await createClient()
@@ -43,7 +40,6 @@ export default async function CommunityPageRoute({ params }) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Fetch community
   const { data: community } = await supabase
     .from('communities')
     .select(`
@@ -58,7 +54,7 @@ export default async function CommunityPageRoute({ params }) {
 
   const isCreator = user.id === community.created_by
 
-  // ── Ban check — creators are never banned from their own community ──────────
+  // Ban check
   if (!isCreator) {
     const { data: ban } = await supabase
       .from('community_bans')
@@ -67,12 +63,9 @@ export default async function CommunityPageRoute({ params }) {
       .eq('user_id', user.id)
       .maybeSingle()
 
-    if (ban) {
-      return <BannedView communityName={community.name} reason={ban.reason} />
-    }
+    if (ban) return <BannedView communityName={community.name} reason={ban.reason} />
   }
 
-  // Member count + join status
   const { count: memberCount } = await supabase
     .from('community_members')
     .select('*', { count: 'exact', head: true })
@@ -85,8 +78,14 @@ export default async function CommunityPageRoute({ params }) {
     .eq('user_id', user.id)
     .maybeSingle()
 
-  // Posts — include is_removed and is_pinned
-  // Mods see all posts; non-mods only see non-removed ones (filter below)
+  // Fetch flairs for this community
+  const { data: flairs } = await supabase
+    .from('flairs')
+    .select('id, name, color, created_at')
+    .eq('community_id', community.id)
+    .order('created_at', { ascending: true })
+
+  // Fetch posts — include flair data via foreign key join
   const { data: posts } = await supabase
     .from('posts')
     .select(`
@@ -95,19 +94,21 @@ export default async function CommunityPageRoute({ params }) {
       author_id,
       profiles!posts_author_id_fkey(username),
       votes(user_id, value),
-      comments(id)
+      comments(id),
+      flairs(id, name, color)
     `)
     .eq('community_id', community.id)
     .order('created_at', { ascending: false })
 
   const enrichedPosts = (posts ?? [])
-    // Non-mods never receive removed posts at all (extra safety on top of client filter)
     .filter(p => isCreator || !p.is_removed)
     .map(p => ({
       ...p,
       score:        p.votes?.reduce((sum, v) => sum + v.value, 0) ?? 0,
       userVote:     p.votes?.find(v => v.user_id === user.id)?.value ?? 0,
       commentCount: p.comments?.length ?? 0,
+      // Supabase returns the FK join as array — unwrap to single object
+      flair: Array.isArray(p.flairs) ? p.flairs[0] ?? null : p.flairs ?? null,
     }))
 
   return (
@@ -117,6 +118,7 @@ export default async function CommunityPageRoute({ params }) {
       isMember={!!membership}
       isCreator={isCreator}
       posts={enrichedPosts}
+      flairs={flairs ?? []}
       userId={user.id}
     />
   )

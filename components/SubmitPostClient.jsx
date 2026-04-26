@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/utils/supabase/client'
-import dynamic from 'next/dynamic'
-import Link from 'next/link'
+import { useRouter }        from 'next/navigation'
+import { createClient }     from '@/utils/supabase/client'
+import dynamic              from 'next/dynamic'
+import Link                 from 'next/link'
+import FlairBadge           from '@/components/FlairBadge'
 
-// Dynamically import editor to avoid SSR issues with tiptap
 const RichTextEditor = dynamic(() => import('@/components/RichTextEditor'), {
   ssr: false,
   loading: () => (
@@ -47,15 +47,16 @@ const POST_TYPES = [
   },
 ]
 
-export default function SubmitPostClient({ community, userId }) {
-  const [postType,   setPostType]   = useState('text')
-  const [title,      setTitle]      = useState('')
-  const [body,       setBody]       = useState('')
-  const [linkUrl,    setLinkUrl]    = useState('')
-  const [imageUrl,   setImageUrl]   = useState('')
-  const [uploading,  setUploading]  = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [errors,     setErrors]     = useState({})
+export default function SubmitPostClient({ community, userId, flairs = [] }) {
+  const [postType,    setPostType]    = useState('text')
+  const [title,       setTitle]       = useState('')
+  const [body,        setBody]        = useState('')
+  const [linkUrl,     setLinkUrl]     = useState('')
+  const [imageUrl,    setImageUrl]    = useState('')
+  const [selectedFlair, setSelectedFlair] = useState(null) // flair object or null
+  const [uploading,   setUploading]   = useState(false)
+  const [submitting,  setSubmitting]  = useState(false)
+  const [errors,      setErrors]      = useState({})
   const imageInputRef = useRef()
   const supabase      = createClient()
   const router        = useRouter()
@@ -63,15 +64,15 @@ export default function SubmitPostClient({ community, userId }) {
   // ── Validate ──────────────────────────────────────────────────────────
   function validate() {
     const e = {}
-    if (!title.trim())                          e.title   = 'Title is required'
-    if (title.trim().length > 300)              e.title   = 'Title must be under 300 characters'
-    if (postType === 'link' && !linkUrl.trim()) e.link    = 'Link URL is required'
-    if (postType === 'image' && !imageUrl)      e.image   = 'Please upload an image'
-    if (postType === 'text' && body === '<p></p>') e.body = 'Body cannot be empty'
+    if (!title.trim())                              e.title = 'Title is required'
+    if (title.trim().length > 300)                  e.title = 'Title must be under 300 characters'
+    if (postType === 'link' && !linkUrl.trim())     e.link  = 'Link URL is required'
+    if (postType === 'image' && !imageUrl)          e.image = 'Please upload an image'
+    if (postType === 'text' && body === '<p></p>')  e.body  = 'Body cannot be empty'
     return e
   }
 
-  // ── Image upload to Supabase Storage ─────────────────────────────────
+  // ── Image upload ───────────────────────────────────────────────────────
   async function handleImageUpload(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -99,7 +100,7 @@ export default function SubmitPostClient({ community, userId }) {
     setUploading(false)
   }
 
-  // ── Submit post ───────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────
   async function handleSubmit() {
     const e = validate()
     if (Object.keys(e).length > 0) { setErrors(e); return }
@@ -111,9 +112,10 @@ export default function SubmitPostClient({ community, userId }) {
       type:         postType,
       community_id: community.id,
       author_id:    userId,
-      body:         postType === 'text'  ? body      : null,
+      flair_id:     selectedFlair?.id ?? null,
+      body:         postType === 'text'  ? body           : null,
       link_url:     postType === 'link'  ? linkUrl.trim() : null,
-      image_url:    postType === 'image' ? imageUrl  : null,
+      image_url:    postType === 'image' ? imageUrl       : null,
     }
 
     const { data: post, error } = await supabase
@@ -138,7 +140,6 @@ export default function SubmitPostClient({ community, userId }) {
 
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        {/* Community avatar */}
         <div className="w-9 h-9 rounded-xl border border-mv-border overflow-hidden bg-mv-primary/10 flex items-center justify-center shrink-0">
           {community.avatar_url ? (
             <img src={community.avatar_url} alt={community.name} className="w-full h-full object-cover" />
@@ -161,7 +162,7 @@ export default function SubmitPostClient({ community, userId }) {
 
       <div className="bg-mv-surface border border-mv-border rounded-2xl overflow-hidden">
 
-        {/* ── Post type tabs ── */}
+        {/* Post type tabs */}
         <div className="flex border-b border-mv-border">
           {POST_TYPES.map(type => (
             <button
@@ -182,7 +183,7 @@ export default function SubmitPostClient({ community, userId }) {
 
         <div className="p-5 space-y-4">
 
-          {/* ── Title ── */}
+          {/* Title */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-mv-muted">Title</label>
@@ -202,7 +203,73 @@ export default function SubmitPostClient({ community, userId }) {
             {errors.title && <p className="text-xs text-red-400">{errors.title}</p>}
           </div>
 
-          {/* ── Text body (rich text) ── */}
+          {/* ── Flair picker ── only shown if community has flairs ── */}
+          {flairs.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-mv-muted">
+                Flair
+                <span className="text-mv-dim font-normal ml-1">(optional)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {/* None option */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedFlair(null)}
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-md border transition-all
+                    ${selectedFlair === null
+                      ? 'bg-mv-surface border-mv-primary/60 text-mv-muted'
+                      : 'bg-mv-surface-2 border-mv-border text-mv-dim hover:border-mv-border hover:text-mv-muted'
+                    }`}
+                >
+                  {selectedFlair === null && (
+                    <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                      <path d="M2 5.5l2 2 4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                  None
+                </button>
+
+                {/* Flair options */}
+                {flairs.map(flair => (
+                  <div key={flair.id} className="relative">
+                    <FlairBadge
+                      name={flair.name}
+                      color={flair.color}
+                      active={selectedFlair?.id === flair.id}
+                      onClick={() => setSelectedFlair(
+                        selectedFlair?.id === flair.id ? null : flair
+                      )}
+                    />
+                    {selectedFlair?.id === flair.id && (
+                      <span
+                        style={{
+                          position: 'absolute', top: '-5px', right: '-5px',
+                          width: '14px', height: '14px', borderRadius: '50%',
+                          background: flair.color,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          border: '2px solid var(--mv-surface)',
+                        }}
+                      >
+                        <svg width="7" height="7" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5.5l2 2 4-4" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Selected flair preview */}
+              {selectedFlair && (
+                <p className="text-xs text-mv-dim">
+                  Post will be tagged as{' '}
+                  <FlairBadge name={selectedFlair.name} color={selectedFlair.color} size="xs" />
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Text body */}
           {postType === 'text' && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-mv-muted">Body</label>
@@ -215,11 +282,10 @@ export default function SubmitPostClient({ community, userId }) {
             </div>
           )}
 
-          {/* ── Image upload ── */}
+          {/* Image upload */}
           {postType === 'image' && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-mv-muted">Image</label>
-
               {imageUrl ? (
                 <div className="relative group rounded-xl overflow-hidden border border-mv-border">
                   <img src={imageUrl} alt="Preview" className="w-full max-h-72 object-cover" />
@@ -261,7 +327,6 @@ export default function SubmitPostClient({ community, userId }) {
                   )}
                 </button>
               )}
-
               <input
                 ref={imageInputRef}
                 type="file"
@@ -273,7 +338,7 @@ export default function SubmitPostClient({ community, userId }) {
             </div>
           )}
 
-          {/* ── Link URL ── */}
+          {/* Link URL */}
           {postType === 'link' && (
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-mv-muted">URL</label>
@@ -304,7 +369,7 @@ export default function SubmitPostClient({ community, userId }) {
 
         </div>
 
-        {/* ── Footer actions ── */}
+        {/* Footer */}
         <div className="px-5 py-4 border-t border-mv-border flex items-center justify-between">
           <Link
             href={`/c/${community.name}`}
@@ -328,7 +393,6 @@ export default function SubmitPostClient({ community, userId }) {
         </div>
 
       </div>
-
     </div>
   )
 }

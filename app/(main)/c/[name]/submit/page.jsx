@@ -1,14 +1,12 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient }    from "@/utils/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import SubmitPostClient from "@/components/SubmitPostClient";
+import SubmitPostClient   from "@/components/SubmitPostClient";
 
 export default async function SubmitPostPage({ params }) {
   const { name } = await params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: community } = await supabase
@@ -36,5 +34,18 @@ export default async function SubmitPostPage({ params }) {
   const canPost = !!membership || communityRow?.created_by === user.id;
   if (!canPost) redirect(`/c/${name}`);
 
-  return <SubmitPostClient community={community} userId={user.id} />;
+  // Fetch this community's flairs so the form can show the picker
+  const { data: flairs } = await supabase
+    .from("flairs")
+    .select("id, name, color")
+    .eq("community_id", community.id)
+    .order("created_at", { ascending: true });
+
+  return (
+    <SubmitPostClient
+      community={community}
+      userId={user.id}
+      flairs={flairs ?? []}
+    />
+  );
 }
