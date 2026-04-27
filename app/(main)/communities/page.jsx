@@ -17,13 +17,13 @@ export default async function CommunitiesPage() {
       description,
       avatar_url,
       created_at,
-      memberships(count)
+      community_members(count)
     `)
     .order('created_at', { ascending: false })
 
   // Fetch communities the user has already joined
   const { data: memberships } = await supabase
-    .from('memberships')
+    .from('community_members')
     .select('community_id')
     .eq('user_id', user.id)
 
@@ -50,7 +50,7 @@ export default async function CommunitiesPage() {
       {communities && communities.length > 0 ? (
         <div className="communities-grid">
           {communities.map((community, i) => {
-            const memberCount = community.memberships?.[0]?.count ?? 0
+            const memberCount = community.community_members?.[0]?.count ?? 0
             const isJoined = joinedIds.has(community.id)
             const initial = community.name.charAt(0).toUpperCase()
 
