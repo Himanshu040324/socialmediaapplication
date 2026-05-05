@@ -1,7 +1,9 @@
-// middleware.js  ← root of project, same level as app/
+// proxy.js
+
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 
+// ✅ change 'middleware' → 'proxy'
 export async function proxy(request) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -28,12 +30,10 @@ export async function proxy(request) {
     },
   );
 
-  // Refreshes the session — do not remove this
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Redirect unauthenticated users away from protected routes
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&

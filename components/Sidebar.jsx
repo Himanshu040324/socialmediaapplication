@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/actions/logoutAction";
 import {
@@ -42,7 +43,58 @@ const navItems = [
   },
 ];
 
-export default function Sidebar({ userId }) {
+function UserAvatar({ avatarUrl, userName, size = 36 }) {
+  const initials = userName
+    ? userName
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "?";
+
+  if (avatarUrl) {
+    return (
+      <Image
+        src={avatarUrl}
+        alt={userName || "User avatar"}
+        width={size}
+        height={size}
+        style={{
+          borderRadius: "50%",
+          objectFit: "cover",
+          flexShrink: 0,
+          border: "2px solid var(--mv-border)",
+        }}
+      />
+    );
+  }
+
+  // Fallback: initials avatar
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: "linear-gradient(135deg, var(--mv-primary) 0%, var(--mv-pink) 100%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        fontSize: size * 0.36 + "px",
+        fontWeight: 700,
+        color: "#fff",
+        fontFamily: "Syne, sans-serif",
+        border: "2px solid var(--mv-border)",
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+export default function Sidebar({ userId, userName, avatarUrl, isAdmin }) {
   const pathname = usePathname();
 
   const isActive = (href) => {
@@ -175,13 +227,95 @@ export default function Sidebar({ userId }) {
         ))}
       </div>
 
-      {/* Bottom — logout */}
+      {/* Bottom — user card + logout */}
       <div
         style={{
           paddingTop: "12px",
           borderTop: "0.5px solid var(--mv-border)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
         }}
       >
+        {/* User profile card */}
+        <Link
+          href="/profile"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "8px 10px",
+            borderRadius: "9px",
+            textDecoration: "none",
+            transition: "background 0.15s ease",
+          }}
+          onMouseEnter={(e) =>
+            (e.currentTarget.style.backgroundColor = "var(--mv-surface)")
+          }
+          onMouseLeave={(e) =>
+            (e.currentTarget.style.backgroundColor = "transparent")
+          }
+        >
+          <UserAvatar avatarUrl={avatarUrl} userName={userName} size={34} />
+
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                flexWrap: "wrap",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "Syne, sans-serif",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  color: "var(--mv-text)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  maxWidth: "100px",
+                }}
+              >
+                {userName || "User"}
+              </span>
+
+              {isAdmin && (
+                <span
+                  style={{
+                    fontSize: "9px",
+                    fontWeight: 700,
+                    fontFamily: "Syne, sans-serif",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    color: "#fff",
+                    backgroundColor: "#e53e3e",
+                    padding: "1px 5px",
+                    borderRadius: "4px",
+                    flexShrink: 0,
+                    lineHeight: "1.6",
+                  }}
+                >
+                  Admin
+                </span>
+              )}
+            </div>
+
+            <span
+              style={{
+                fontFamily: "Syne, sans-serif",
+                fontSize: "11px",
+                color: "var(--mv-muted)",
+              }}
+            >
+              View profile
+            </span>
+          </div>
+        </Link>
+
+        {/* Logout button */}
         <form action={logoutAction}>
           <button
             type="submit"

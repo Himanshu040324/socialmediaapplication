@@ -22,6 +22,7 @@ export default function RootLayout({ children }) {
     >
       <body className="min-h-full flex flex-col font-sans bg-mv-bg">
         <ThemeProvider
+        
           attribute="class"
           defaultTheme="system"
           enableSystem
