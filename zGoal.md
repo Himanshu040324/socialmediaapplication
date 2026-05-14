@@ -27,6 +27,11 @@ Step 6 → Add sort options (hot, new, top)
 6. On feed, there's a joined section but it does not show the joined communities.
 7. When you join community, you click on join it shows joined-leave option but on refresh it resets.
 
+8. Create post button on home does not work.
+9. Bookmark does not work 
+10. Some update on notification section is pending
+11. New communities section open normal communities section.
+
 # Main Issue - When i go to /admin/dashboard it redirects to /feed page, it's like access is denied.
 
 # To be created later
